@@ -1,0 +1,33 @@
+# Dependencies
+FROM node:iron-alpine3.20 AS deps
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+# Builder
+FROM node:iron-alpine3.20 AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package-lock.json ./
+COPY . .
+
+RUN npm run build
+RUN npm ci -f --omit=dev
+RUN npm cache clean --force
+
+# Runner
+FROM node:iron-alpine3.20 AS runner
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+ENV NODE_ENV=production
+
+USER node
+
+EXPOSE 3000
+CMD ["node", "dist/main"]
